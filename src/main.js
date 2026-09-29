@@ -200,6 +200,8 @@ async function boot() {
     }
     return out;
   };
+  // hosts that hot-swap the page (Claude artifacts) ask for a snapshot first: save the voyage
+  try { window.claude?.hot?.snapshot?.(() => { save(); return { saved: true }; }); } catch (e) { }
   window.__settleCam = n => { for (let i = 0; i < n; i++) updateCamera(1 / 60); };
   window.__startDock = startDocking; window.__leaveYard = leaveYard; window.__castOff = castOffFrom; window.__emitWake = emitWake;
   window.__fog = { step, boat, cam, st, UP, tide, docks: () => docks, npcs: () => npcs, heightAt, hDatum, reveal, S, setPaused: v => paused = v, chartAll: v => { chartAll = v; }, openYard, findFuel, toggleHeadUp, teleport: (x, y, h) => { boat.x = x; boat.y = y; boat.h = h || 0; boat.u = boat.v = boat.r = boat.plane = boat.trim = 0; boat.tied = null; boat.auto = null; cam.x = x; cam.y = y; }, labels: () => labels, items: () => items, towns: () => towns, roads: () => roads };
