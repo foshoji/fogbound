@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fogbound</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap">
+<style>
+/* One deliberate look: chart paper and ink, over a sea that moves. */
+:root{
+  --ink:#1d2b33; --ink-soft:rgba(29,43,51,.6); --hair:rgba(29,43,51,.3);
+  --paper:#f5f0e3; --paper-a:rgba(245,240,227,.92); --sea:#2f6f98; --brass:#b3893a; --magenta:#a8327a; --warn:#b0522a; --good:#3f7a52; --signal:#e0612b;
+  --f-display:"IM Fell English SC","IM Fell English",Georgia,"Times New Roman",serif;
+  --f-body:"IM Fell English",Georgia,"Times New Roman",serif;
+  --f-data:"Azeret Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#dfe3e2;color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px}
+[hidden]{display:none!important}
+#app{position:fixed;inset:0;overflow:hidden;background:#dfe3e2;user-select:none;-webkit-user-select:none}
+#gl,#ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{touch-action:none;cursor:crosshair}
+.block{position:absolute;background:var(--paper-a);border:1px solid var(--ink);box-shadow:inset 0 0 0 3px var(--paper),inset 0 0 0 4px var(--hair),0 2px 10px rgba(20,30,36,.12);padding:10px 12px;border-radius:2px}
+.k{font-style:italic;color:var(--ink-soft);font-size:13px}
+button{font:inherit;color:var(--ink);background:var(--paper-a);border:1px solid var(--ink);border-radius:2px;padding:6px 10px;cursor:pointer}
+button:hover:not(:disabled){background:#fffaf0}
+button:disabled{opacity:.45;cursor:default}
+button.primary{font-family:var(--f-display);letter-spacing:.1em;background:var(--ink);color:var(--paper)}
+button.primary:hover:not(:disabled){background:#2c3f4a}
+button:focus-visible,.station:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
+kbd{font-family:var(--f-data);font-size:11px;border:1px solid currentColor;border-radius:3px;padding:0 4px;margin-left:6px;opacity:.8}
+
+#log{left:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:6px;min-width:190px}
+.mark{font-family:var(--f-display);font-size:23px;letter-spacing:.2em;line-height:1}
+.counts{display:grid;grid-template-columns:auto auto;gap:2px 14px;margin:0;font-size:13px}
+.counts div{display:contents}
+.counts dt{color:var(--ink-soft);font-style:italic}
+.counts dd{margin:0;font-family:var(--f-data);font-size:12px;text-align:right;font-variant-numeric:tabular-nums;transition:transform .18s,color .18s}
+.counts dd.bump{transform:scale(1.2);color:var(--sea)}
+.tools{position:absolute;right:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;gap:6px}
+.tools button{font-size:14px}
+.tools button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+#b-mute.off{text-decoration:line-through}
+#compass{position:absolute;right:16px;top:calc(62px + env(safe-area-inset-top,0px));width:62px;height:62px;padding:0;border-radius:50%;background:var(--paper-a);border:1px solid var(--ink);box-shadow:inset 0 0 0 3px var(--paper),inset 0 0 0 4px var(--hair)}
+#compass svg{width:100%;height:100%;display:block;transition:none}
+
+/* the helm */
+#helm{left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:6px;width:250px}
+.helm-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.spd{display:flex;align-items:baseline;gap:4px}
+.spd .v{font-family:var(--f-data);font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;min-width:2.2ch;text-align:right}
+.spd .u{font-family:var(--f-display);font-size:14px;letter-spacing:.08em}
+.planing{display:flex;flex-direction:column;align-items:center;gap:0}
+#pl-icon{width:118px;height:42px;display:block;overflow:visible}
+.plane-l{font-family:var(--f-display);font-size:12px;letter-spacing:.08em;padding:0 7px;border:1px solid var(--hair);border-radius:9px;white-space:nowrap;margin-top:-2px;transition:background .3s,color .3s}
+.plane-l.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.plane-l.bad{background:#f3dcd0;border-color:var(--warn);color:var(--warn)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}
+.t{font-family:var(--f-data);font-size:11px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.v2{font-size:13px;font-weight:600}
+.v2.warn{color:var(--warn)}
+.row.thr .bar{flex:1}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:12px}
+.bar{height:7px;border:1px solid var(--ink);background:var(--paper);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--ink);transition:width .25s}
+.bar i.low{background:var(--warn)}
+#i-thr{background:var(--sea);transition:width .1s}
+#i-thr.astern{background:var(--warn)}
+.fuelbar{cursor:pointer}
+#sounder{width:100%;height:36px;display:block;border:1px solid var(--hair)}
+
+#tide{right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:186px;display:grid;gap:3px}
+#tide .tname{font-family:var(--f-display);font-size:17px;letter-spacing:.05em}
+#tide svg{width:100%;height:34px;display:block}
+#tide .tline{font-size:13px;line-height:1.25}
+
+#scale{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column;align-items:flex-start;gap:2px;pointer-events:none}
+#scale-bar{height:5px;border:1px solid var(--ink);border-top:0;background:linear-gradient(90deg,var(--ink) 0 50%,transparent 50% 100%) 0 0/50% 100%;background-color:var(--paper-a);transition:width .3s}
+#scale-t{font-family:var(--f-data);font-size:10px;background:var(--paper-a);padding:0 3px}
+
+#radio{left:50%;bottom:calc(52px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);max-width:min(560px,calc(100% - 560px));min-width:260px;padding:6px 12px;font-size:14px;line-height:1.35;opacity:0;transition:opacity .4s,transform .4s;pointer-events:none}
+#radio.show{opacity:1;transform:translate(-50%,0)}
+#radio .ch{font-family:var(--f-data);font-size:10px;background:var(--ink);color:var(--paper);padding:1px 5px;margin-right:8px;border-radius:2px;vertical-align:1px}
+#radio b{font-family:var(--f-display);font-weight:400;letter-spacing:.04em;margin-right:4px}
+
+#toast{position:absolute;left:50%;top:calc(18px + env(safe-area-inset-top,0px));transform:translate(-50%,-8px);max-width:min(540px,calc(100% - 32px));padding:10px 16px;text-align:center;font-size:16px;line-height:1.35;opacity:0;transition:opacity .35s,transform .35s;pointer-events:none;text-wrap:balance}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast b{font-family:var(--f-display);font-weight:400;letter-spacing:.08em;display:block;font-size:13px;color:var(--sea)}
+#toast .gain{font-family:var(--f-data);font-size:12px;color:var(--good);display:block}
+#dockbar{position:absolute;left:50%;top:calc(50% + 70px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px}
+#dockbar button{font-family:var(--f-display);letter-spacing:.08em;font-size:16px;padding:8px 16px;background:var(--ink);color:var(--paper);box-shadow:0 2px 0 rgba(0,0,0,.2)}
+#dockbar .hint{font-style:italic;font-size:14px;background:var(--paper-a);border:1px solid var(--hair);padding:3px 10px;border-radius:2px}
+
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(29,43,51,.28);overflow:auto}
+.overlay>*{margin-block:auto;flex-shrink:0}
+#intro{background:radial-gradient(ellipse at center,rgba(236,238,236,.35),rgba(214,220,222,.85))}
+.cart{position:relative;max-width:480px;width:100%;padding:28px 30px 22px;display:grid;gap:14px}
+.cart h1{margin:0;font-family:var(--f-display);font-weight:400;font-size:clamp(36px,9vw,54px);letter-spacing:.24em;text-align:center;line-height:1;padding-left:.24em}
+.cart .sub{margin:0;text-align:center;font-style:italic;font-size:17px;text-wrap:balance}
+.cart ul{margin:0;padding:0;list-style:none;display:grid;gap:7px;font-size:15px;line-height:1.35}
+.cart li{display:grid;grid-template-columns:70px 1fr;gap:10px}
+.cart li span:first-child{font-family:var(--f-display);letter-spacing:.08em;font-size:13px;padding-top:2px}
+.cart .meta{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.cart .prog{font-family:var(--f-data);font-size:11px;color:var(--ink-soft)}
+#b-go{font-size:18px;padding:8px 22px}
+.cart .scale{font-family:var(--f-data);font-size:10px;text-align:center;color:var(--ink-soft);border-top:1px solid var(--hair);padding-top:8px;line-height:1.5}
+.sheet{position:relative;width:min(980px,100%);display:grid;gap:12px;padding:16px 18px}
+.sheet header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--hair);padding-bottom:8px}
+.sheet h2{margin:0;font-family:var(--f-display);font-weight:400;letter-spacing:.1em;font-size:22px}
+.sheet .purse{font-family:var(--f-data);font-size:13px}
+.yard-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+.plan{background:#fbf8ef;border:1px solid var(--hair);min-width:0}
+.plan svg{width:100%;height:auto;display:block}
+.station{cursor:pointer}
+.station .hit{fill:transparent;stroke:none}
+.station:hover .hit,.station.sel .hit{fill:rgba(179,137,58,.18)}
+.station.sel .frame{stroke:var(--brass);stroke-width:2.5}
+.bench{display:grid;gap:10px;min-width:0}
+.bench h3{margin:0;font-family:var(--f-display);font-weight:400;letter-spacing:.08em;font-size:18px}
+.bench p{margin:0;line-height:1.4;font-size:15px}
+.tier{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:8px 10px;border:1px solid var(--hair);background:rgba(255,255,255,.45)}
+.tier b{font-weight:400;font-family:var(--f-display);letter-spacing:.04em}
+.tier span{grid-column:1/-1;font-size:14px;font-style:italic;color:var(--ink-soft)}
+.tier .tag{font-family:var(--f-data);font-size:11px;grid-column:auto;font-style:normal}
+.tier.fitted{border-color:var(--good)}
+.tier.fitted .tag{color:var(--good)}
+.yard-foot{display:grid;grid-template-columns:1fr 1fr auto;gap:12px 18px;align-items:center;border-top:1px solid var(--hair);padding-top:10px}
+.gauge{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;font-size:14px}
+.gauge .bar{height:9px}
+.gauge button{grid-column:1/-1;justify-self:start;font-size:14px}
+.card{position:relative;width:min(540px,100%);padding:22px 24px;display:grid;gap:12px}
+.card .eyebrow{font-family:var(--f-display);letter-spacing:.1em;font-size:13px;color:var(--sea)}
+.card h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:25px;letter-spacing:.06em}
+.card p{margin:0;font-size:17px;line-height:1.5;max-width:60ch}
+.card p.tag{font-style:italic;color:var(--ink-soft);font-size:15px}
+.card p.page{font-style:italic;border-left:2px solid var(--brass);padding-left:12px}
+.card .gain{font-family:var(--f-data);font-size:12px;color:var(--good)}
+.card .actions{display:flex;justify-content:flex-end}
+#help .card dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:15px}
+#help dt{font-family:var(--f-data);font-size:12px;padding-top:2px;white-space:nowrap}
+#help dd{margin:0}
+@media (max-width:980px){#radio{max-width:calc(100% - 32px);bottom:calc(210px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:760px){.yard-body{grid-template-columns:1fr}.yard-foot{grid-template-columns:1fr}}
+@media (max-width:600px){
+  #log{min-width:0;padding:8px 10px}.mark{font-size:18px}
+  #helm{width:196px;padding:8px 10px}.spd .v{font-size:24px}#pl-icon{width:86px;height:32px}#sounder{height:26px}.row.hd{display:none}
+  #tide{width:140px;padding:8px 10px}#tide svg{height:24px}#tide .tname{font-size:15px}#tide .tline{font-size:12px}
+  .tools{gap:4px}.tools button{font-size:12px;padding:5px 7px}#b-hdg,#b-help{display:none}
+  #toast{top:calc(120px + env(safe-area-inset-top,0px));font-size:15px}
+  #compass{width:48px;height:48px;top:calc(54px + env(safe-area-inset-top,0px))}
+  #scale{display:none}
+}
+@media (prefers-reduced-motion:reduce){#toast,#radio,.counts dd,.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <canvas id="ov" aria-label="The sea. Hold on the water to steer."></canvas>
+
+  <header class="block" id="log">
+    <div class="mark">Fogbound</div>
+    <dl class="counts">
+      <div><dt>Glass floats</dt><dd id="c-float">0</dd></div>
+      <div><dt>Wayfinder&rsquo;s log</dt><dd id="c-page">0 / 8</dd></div>
+      <div><dt>Charted</dt><dd id="c-chart">0%</dd></div>
+    </dl>
+  </header>
+
+  <div class="tools">
+    <button id="b-hdg" type="button" aria-pressed="false" title="Heading-up or north-up (H)">North up</button>
+    <button id="b-mute" type="button" aria-pressed="false">Sound</button>
+    <button id="b-help" type="button">Keys</button>
+    <button id="b-reset" type="button">New voyage</button>
+  </div>
+  <button id="compass" type="button" aria-label="Compass. Toggle heading-up."><svg viewBox="-32 -32 64 64" id="rose">
+    <circle r="27" fill="none" stroke="#1d2b33" stroke-width=".8"/><circle r="23" fill="none" stroke="#1d2b33" stroke-width=".5"/>
+    <g stroke="#1d2b33" stroke-width=".7"><path d="M0 -27V-23M0 27V23M-27 0H-23M27 0H23"/></g>
+    <path d="M0 -21L4 0L0 3L-4 0Z" fill="#a8327a"/><path d="M0 21L4 0L0 -3L-4 0Z" fill="none" stroke="#1d2b33" stroke-width=".8"/>
+    <text y="-10" text-anchor="middle" font-family="IM Fell English SC, Georgia, serif" font-size="9" fill="#1d2b33" transform="translate(0 -1)">N</text>
+  </svg></button>
+
+  <section class="block" id="helm" aria-label="Helm">
+    <div class="helm-top">
+      <div class="spd"><span id="i-spd" class="v">0.0</span><span class="u">kn</span></div>
+      <div class="planing" title="Hull attitude">
+        <svg viewBox="-12 4 132 38" id="pl-icon" aria-hidden="true">
+          <path id="pl-wash" d="M92 31Q100 21 110 31Z" fill="#fff" opacity="0"/>
+          <g id="pl-hull">
+            <path d="M-2 20h9v15h-9z" fill="#15191c"/>
+            <path d="M14 20L94 18.5Q106 18 114 15.5Q109 25 96 31.5L15 32.5Z" fill="#2d3942"/>
+            <path d="M15 27.5L99 26.5" stroke="#e0612b" stroke-width="1.6"/>
+            <path d="M42 19L46 10.5H69L75 19" fill="none" stroke="#1d2b33" stroke-width="1.6"/>
+            <path d="M44 10.5H71" stroke="#1d2b33" stroke-width="2.6"/>
+            <path d="M69 11L78 18.5" stroke="#4f7890" stroke-width="2"/>
+          </g>
+          <rect x="-12" y="31" width="132" height="12" fill="rgba(47,111,152,.28)"/>
+          <path d="M-12 31H120" stroke="#2f6f98" stroke-width="1.2"/>
+          <g id="pl-spray" opacity="0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M62 30Q52 24 40 26"/><path d="M72 30Q64 22 54 21"/><path d="M-2 30Q-8 22 -12 25"/></g>
+        </svg>
+        <span id="i-plane" class="plane-l">Displacement</span>
+      </div>
+    </div>
+    <div class="row thr"><span class="k">Throttle</span><div class="bar"><i id="i-thr" style="width:0"></i></div><span id="i-rpm" class="t">engines off</span></div>
+    <div class="row"><span class="k">Depth</span><span id="i-depth" class="t v2">&mdash;</span><span class="k">Heading</span><span id="i-hdg" class="t">000&deg;</span></div>
+    <canvas id="sounder"></canvas>
+    <div class="bars">
+      <span class="k">Fuel</span><div class="bar fuelbar" title="Nearest fuel (F)"><i id="b-fuel" style="width:100%"></i></div><span class="t" id="t-fuel">380 L</span>
+      <span class="k">Hull</span><div class="bar"><i id="b-hull" style="width:100%"></i></div><span class="t" id="t-hull">100%</span>
+    </div>
+  </section>
+
+  <section class="block" id="tide" aria-label="Tide">
+    <div class="k">Tide</div>
+    <div class="tname" id="t-name">High water</div>
+    <svg viewBox="0 0 160 34" aria-hidden="true"><path id="t-path" fill="none" stroke="#1d2b33" stroke-width="1.4"/><line id="t-mark" y1="2" y2="32" stroke="#a8327a" stroke-width="1.6"/></svg>
+    <div class="tline" id="t-next">Falls in 2:30</div>
+    <div class="tline k" id="t-stream">Streams slack</div>
+    <div class="tline k" id="vis">Visibility good</div>
+  </section>
+
+  <div id="scale"><div id="scale-bar" style="width:100px"></div><span id="scale-t">100 m</span></div>
+  <div id="radio" class="block" role="status" aria-live="polite"></div>
+  <div id="dockbar" hidden><button id="b-dock" type="button">Come alongside</button><span class="hint" id="dock-hint" hidden>Slow down to come alongside</span></div>
+  <div id="toast" class="block" role="status" aria-live="polite"></div>
+
+  <div id="intro" class="overlay">
+    <div class="cart block">
+      <h1>Fogbound</h1>
+      <p class="sub">A fast boat, an island you know, and a sea that isn&rsquo;t finished yet.</p>
+      <ul>
+        <li><span>Helm</span><span>W and S set the throttle and it stays set; 1&ndash;4 for dead slow to full, X for stop. A and D steer. Or hold on the water where you want to go.</span></li>
+        <li><span>Plane</span><span>Push past the hump and she lifts onto the plane. A damaged hull won&rsquo;t let her.</span></li>
+        <li><span>Fuel</span><span>Free at every pump and barge. F finds the nearest.</span></li>
+        <li><span>View</span><span>H for heading-up, M for the whole chart, scroll or Q and E to zoom.</span></li>
+        <li><span>Sea</span><span>The further from Olvenholt, the deeper the water and the thicker the fog.</span></li>
+      </ul>
+      <div class="meta"><span class="prog" id="prog">Sounding the sea&hellip; 0%</span><button id="b-go" class="primary" type="button" disabled>Cast off</button></div>
+      <div class="scale">Olvenholt and the Hushing Sea &middot; soundings in metres, reduced to mid tide<br>Coastlines derived from MLIT National Land Numerical Information (administrative areas), redrawn</div>
+    </div>
+  </div>
+
+  <div id="yard" class="overlay" hidden>
+    <div class="sheet block" role="dialog" aria-modal="true" aria-labelledby="yard-title">
+      <header><h2 id="yard-title">Boatworks</h2><span class="k" id="yard-sub"></span><span class="purse" id="yard-purse">0 floats</span></header>
+      <div class="yard-body">
+        <div class="plan" id="plan"></div>
+        <aside class="bench" id="bench"></aside>
+      </div>
+      <div class="yard-foot">
+        <div class="gauge"><span class="k">Fuel</span><div class="bar"><i id="y-fuel"></i></div><span id="y-fuel-t">380 L</span><button id="y-fill" type="button">Fill up &middot; free</button></div>
+        <div class="gauge"><span class="k">Hull</span><div class="bar"><i id="y-hull"></i></div><span id="y-hull-t">100%</span><button id="y-repair" type="button">Repair</button></div>
+        <button id="y-go" class="primary" type="button">Cast off</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="card" class="overlay" hidden>
+    <div class="card block" role="dialog" aria-modal="true" aria-labelledby="card-title">
+      <div class="eyebrow" id="card-eye"></div>
+      <h2 id="card-title"></h2>
+      <div id="card-body"></div>
+      <div class="actions"><button id="card-go" class="primary" type="button">Carry on</button></div>
+    </div>
+  </div>
+
+  <div id="help" class="overlay" hidden>
+    <div class="card block" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="eyebrow">At the helm</div>
+      <h2 id="help-title">Keys</h2>
+      <dl>
+        <dt>W / S &middot; &uarr; &darr;</dt><dd>Throttle up and down. It stays where you leave it.</dd>
+        <dt>1 2 3 4 &middot; X</dt><dd>Dead slow, half, cruise, full. X or Space: all stop.</dd>
+        <dt>A / D &middot; &larr; &rarr;</dt><dd>Steer.</dd>
+        <dt>Hold on the water</dt><dd>Steer towards that point; further away is more throttle.</dd>
+        <dt>Enter</dt><dd>Come alongside, go ashore, cast off.</dd>
+        <dt>F</dt><dd>Nearest fuel. Press again for the next nearest.</dd>
+        <dt>H</dt><dd>Heading-up or north-up.</dd>
+        <dt>M</dt><dd>The whole chart.</dd>
+        <dt>Q / E &middot; scroll</dt><dd>Zoom.</dd>
+      </dl>
+      <div class="actions"><button id="help-close" class="primary" type="button">Back to the helm</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- build:scripts -->
+<script src="src/core.js"></script>
+<script src="src/state.js"></script>
+<script src="src/data/coast.js"></script>
+<script src="src/data/world.js"></script>
+<script src="src/terrain.js"></script>
+<script src="src/places.js"></script>
+<script src="src/chart.js"></script>
+<script src="src/render.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/boat.js"></script>
+<script src="src/traffic.js"></script>
+<script src="src/draw.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+<!-- /build:scripts -->
+</body>
+</html>

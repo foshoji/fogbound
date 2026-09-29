@@ -1,0 +1,82 @@
+// Builds src/data/coast.js from real Seto Inland Sea coastlines.
+//
+// Source: MLIT National Land Numerical Information, administrative areas (N03, 2021),
+// as simplified GeoJSON in github.com/smartnews-smri/japan-topography (s0010).
+// Usage: node tools/extract-coast.mjs [path-to-japan-topography]
+//
+// The real islands are only the starting silhouettes. Each group is scaled down, moved
+// into place around the main island and renamed; the game then adds fractal detail on
+// top at load time.
+import fs from 'node:fs';
+import path from 'node:path';
+
+const repo = process.argv[2] || path.resolve('..', 'smartnews-smri', 'japan-topography');
+const dir = path.join(repo, 'data/municipality/geojson/s0010');
+const files = ['N03-21_37_210101.json', 'N03-21_28_210101.json', 'N03-21_33_210101.json', 'N03-21_34_210101.json'];
+
+const rings = [];
+for (const f of files) {
+  const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+  for (const ft of j.features) {
+    const g = ft.geometry, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    for (const p of polys) rings.push(p[0]);
+  }
+}
+function centroid(r) {
+  let a = 0, cx = 0, cy = 0;
+  for (let k = 0; k < r.length - 1; k++) {
+    const [x1, y1] = r[k], [x2, y2] = r[k + 1], c = x1 * y2 - x2 * y1;
+    a += c; cx += (x1 + x2) * c; cy += (y1 + y2) * c;
+  }
+  return [cx / (3 * a), cy / (3 * a)];
+}
+const pick = (lon, lat) => {
+  let best = null, bd = 0.012;
+  for (const r of rings) { const [x, y] = centroid(r), d = Math.hypot(x - lon, y - lat); if (d < bd) { bd = d; best = r; } }
+  if (!best) throw new Error(`no polygon near ${lon},${lat}`);
+  return best;
+};
+
+// World: 16384 m square, main island centred. S = real-to-game scale.
+const WC = 8192, S = 0.34, LON0 = 134.2625, LAT0 = 34.505;
+const KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110574;
+
+// Groups: real centroids of the islands in each group, where the group's box is centred in
+// the game (km; omit to keep the real position), and how much to squeeze the gaps inside
+// the group. Names are the game's (fantasy) names.
+const groups = [
+  { id: 'olvenholt', name: 'Olvenholt', peak: 330, main: true, polys: [[134.2938, 34.4908], [134.2312, 34.5145]] },
+  { id: 'brinehold', name: 'Brinehold', peak: 120, at: [3.05, 9.35], polys: [[134.0743, 34.4808]] },
+  { id: 'littlebrine', name: 'Little Brine', peak: 40, at: [4.75, 10.55], polys: [[134.1181, 34.4772]] },
+  { id: 'wick', name: 'The Wick', peak: 18, at: [5.25, 7.15], polys: [[134.1485, 34.5186]] },
+  { id: 'tallow', name: 'Tallow Rock', peak: 14, polys: [[134.1874, 34.4703]] },
+  { id: 'hearth', name: 'The Hearthstones', peak: 95, at: [2.6, 12.9], spread: 0.8, polys: [[133.9854, 34.4592], [134.0175, 34.4921], [134.0033, 34.4675], [133.9617, 34.4576], [134.0091, 34.4392], [133.9548, 34.4728], [133.9807, 34.4912], [133.9727, 34.5081], [133.9741, 34.4769], [133.9921, 34.4840]] },
+  { id: 'maiden', name: 'Maiden & Crone', peak: 85, at: [5.6, 13.3], spread: 0.55, polys: [[134.0477, 34.3937], [134.0600, 34.4256], [134.1062, 34.4056], [134.1252, 34.4184], [134.1747, 34.3930]] },
+  { id: 'farrows', name: 'The Farrows', peak: 70, at: [13.2, 4.3], spread: 0.6, polys: [[134.4799, 34.6539], [134.5300, 34.6722], [134.5761, 34.6643], [134.5109, 34.6468], [134.4805, 34.5965], [134.4390, 34.6515]] },
+  { id: 'pales', name: 'The Pales', peak: 45, at: [7.6, 3.4], spread: 0.7, polys: [[134.1836, 34.6093], [134.2295, 34.6745], [134.2526, 34.6826], [134.2589, 34.6983]] },
+];
+const out = [];
+const q = v => Math.round(v);
+for (const g of groups) {
+  const rs = g.polys.map(([lon, lat]) => pick(lon, lat));
+  const cs = rs.map(centroid), gx = cs.reduce((a, c) => a + c[0], 0) / cs.length, gy = cs.reduce((a, c) => a + c[1], 0) / cs.length;
+  const sp = g.spread || 1;
+  // each piece: its centroid's (squeezed) offset from the group centre, plus its own shape
+  const placed = rs.map((r, i) => r.slice(0, -1).map(([lon, lat]) => [
+    ((cs[i][0] - gx) * sp + (lon - cs[i][0])) * KX * S, -((cs[i][1] - gy) * sp + (lat - cs[i][1])) * KY * S]));
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const pts of placed) for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const [ox, oy] = g.at ? [g.at[0] * 1000 - (x0 + x1) / 2, g.at[1] * 1000 - (y0 + y1) / 2] : [WC + (gx - LON0) * KX * S, WC - (gy - LAT0) * KY * S];
+  for (const pts of placed) out.push({ id: g.id, name: g.name, peak: g.peak, main: !!g.main, pts: pts.map(([x, y]) => [q(x + ox), q(y + oy)]) });
+}
+// The lagoon isle far out in the fog: Etajima's shape, from the Hiroshima file, centred at (13.3, 13.2) km.
+{
+  const r = pick(132.4486, 34.2190), [gx, gy] = centroid(r), s2 = 0.2;
+  const pts = r.slice(0, -1).map(([lon, lat]) => [q(13300 + (lon - gx) * KX * s2), q(13200 - (lat - gy) * KY * s2)]);
+  out.push({ id: 'hollow', name: 'Hollow Isle', peak: 150, main: false, pts });
+}
+let js = `// Generated by tools/extract-coast.mjs. Do not edit by hand.\n// Silhouettes from MLIT N03 administrative areas (2021) via smartnews-smri/japan-topography,\n// scaled, rearranged and renamed for the game.\nconst COAST = [\n`;
+for (const o of out) js += `  { id: '${o.id}', name: '${o.name}', peak: ${o.peak}, main: ${o.main}, pts: '${o.pts.map(p => p.join(',')).join(' ')}' },\n`;
+js += `];\n`;
+fs.writeFileSync(path.resolve('src/data/coast.js'), js);
+console.log(out.length, 'rings,', out.reduce((a, o) => a + o.pts.length, 0), 'points');
